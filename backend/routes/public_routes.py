@@ -47,6 +47,17 @@ def get_groups():
     return jsonify(groups), 200
 
 
+@public_bp.route("/api/get-courses-list", methods=["GET"])
+def get_course_list():
+    response = (
+        supabase.table("course")
+        .select("course_id, course_name")
+        .order("course_id")
+        .execute()
+    )
+    return jsonify(response.data or []), 200
+
+
 @public_bp.route("/api/study-materials", methods=["GET"])
 def get_study_materials():
     meeting_id = request.args.get("meeting_id")

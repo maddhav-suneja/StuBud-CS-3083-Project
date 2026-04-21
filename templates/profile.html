@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Profile</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
 </head>
+
 <body>
   <main class="page page-light">
     <section class="card-wide">
@@ -16,38 +17,47 @@
 
         <section>
           <h1 class="page-title">Profile</h1>
-          <form id="profileForm" style="margin-top: 18px; max-width: 760px;">
+
+          <form id="profileForm" class="profile-form">
+
             <div class="form-grid">
-              <div class="form-group"><label>First Name</label><input id="firstName" type="text" /></div>
-              <div class="form-group"><label>Last Name</label><input id="lastName" type="text" /></div>
-              <div class="form-group"><label>Email</label><input id="email" type="email" disabled /></div>
-              <div></div>
+              <div class="form-group">
+                <label>First Name</label>
+                <input id="firstName" type="text" />
+              </div>
+
+              <div class="form-group">
+                <label>Last Name</label>
+                <input id="lastName" type="text" />
+              </div>
+
+              <div class="form-group">
+                <label>Email</label>
+                <input id="email" type="email" disabled />
+              </div>
             </div>
 
-            <div class="form-row-3" style="margin-top: 10px;">
-              <div class="form-group">
-                <label>Week Day</label>
-                <select id="weekDay">
-                  <option></option>
-                  <option>Monday</option>
-                  <option>Tuesday</option>
-                  <option>Wednesday</option>
-                  <option>Thursday</option>
-                  <option>Friday</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Start Time</label>
-                <input id="startTime" type="time" />
-              </div>
-              <div class="form-group">
-                <label>End Time</label>
-                <input id="endTime" type="time" />
-              </div>
+            <!-- COURSES -->
+            <div class="form-group course-picker">
+              <label>Courses Taken</label>
+              <input id="courseInput" type="text" placeholder="Type to search or add courses..." autocomplete="off" />
+              <div id="courseSuggestions" class="course-suggestions"></div>
+              <div id="selectedCourses" class="selected-tags"></div>
+            </div>
+
+            <!-- MULTIPLE TIME SLOTS -->
+            <div class="form-group">
+              <label>Available Times</label>
+
+              <div id="timeSlots"></div>
+
+              <button type="button" id="addTimeBtn" class="btn btn-secondary">
+                + Add Time Slot
+              </button>
             </div>
 
             <div class="form-group">
-              <label>New Password (leave blank to keep current)</label>
+              <label>New Password</label>
               <input id="password" type="password" />
             </div>
 
@@ -55,64 +65,225 @@
               <button class="btn btn-primary" type="submit">Update Profile</button>
               <a class="btn btn-secondary" href="/dashboard">Cancel</a>
             </div>
+
           </form>
         </section>
       </div>
     </section>
   </main>
-  <script>
-    async function loadProfile() {
-      const token = localStorage.getItem('token');
-      try {
-        const response = await fetch('/api/profile', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
-        if (response.ok) {
-          document.getElementById('firstName').value = data.student.first_name || '';
-          document.getElementById('lastName').value = data.student.last_name || '';
-          document.getElementById('email').value = data.student.nyu_email || '';
-        }
-      } catch (error) {
-        console.error('Error:', error);
-      }
+
+<script>
+let allCourses = [];
+let selectedCourses = [];
+let timeSlots = [];
+
+/* ---------------- COURSES ---------------- */
+
+function normalize(name) {
+  return (name || '').trim().toLowerCase();
+}
+
+async function loadCourses() {
+  const res = await fetch('/api/get-courses-list');
+  allCourses = await res.json();
+}
+
+function renderSelectedCourses() {
+  const container = document.getElementById('selectedCourses');
+  container.innerHTML = '';
+
+  selectedCourses.forEach((c, i) => {
+    const tag = document.createElement('span');
+    tag.className = 'selected-tag';
+
+    tag.innerHTML = `
+      ${c.name}
+      <button type="button">×</button>
+    `;
+
+    tag.querySelector('button').onclick = () => {
+      selectedCourses.splice(i, 1);
+      renderSelectedCourses();
+    };
+
+    container.appendChild(tag);
+  });
+}
+
+function addCourse(course) {
+  const name = course.course_name || course.name;
+  if (!name) return;
+
+  if (selectedCourses.some(c => normalize(c.name) === normalize(name))) return;
+
+  selectedCourses.push({
+    id: course.course_id || null,
+    name: name,
+    isNew: !course.course_id
+  });
+
+  renderSelectedCourses();
+  document.getElementById('courseInput').value = '';
+  document.getElementById('courseSuggestions').innerHTML = '';
+}
+
+function renderSuggestions(query) {
+  const box = document.getElementById('courseSuggestions');
+  box.innerHTML = '';
+
+  if (!query.trim()) return;
+
+  const filtered = allCourses.filter(c =>
+    normalize(c.course_name).includes(normalize(query))
+  );
+
+  filtered.forEach(c => {
+    const div = document.createElement('div');
+    div.textContent = c.course_name;
+    div.onclick = () => addCourse(c);
+    box.appendChild(div);
+  });
+
+  if (!filtered.some(c => normalize(c.course_name) === normalize(query))) {
+    const div = document.createElement('div');
+    div.textContent = `Add "${query}"`;
+    div.onclick = () => addCourse({ course_name: query });
+    box.appendChild(div);
+  }
+}
+
+document.getElementById('courseInput').addEventListener('input', e => {
+  renderSuggestions(e.target.value);
+});
+
+/* ---------------- TIME SLOTS ---------------- */
+
+function renderTimeSlots() {
+  const container = document.getElementById('timeSlots');
+  container.innerHTML = '';
+
+  timeSlots.forEach((slot, i) => {
+    const div = document.createElement('div');
+    div.className = 'time-slot';
+
+    div.innerHTML = `
+      <select class="weekDay">
+        <option value="">Day</option>
+        <option value="1">Mon</option>
+        <option value="2">Tue</option>
+        <option value="3">Wed</option>
+        <option value="4">Thu</option>
+        <option value="5">Fri</option>
+      </select>
+
+      <input type="time" class="startTime"/>
+      <input type="time" class="endTime"/>
+
+      <button type="button" class="remove-btn">x</button>
+    `;
+
+    div.querySelector('.weekDay').value = slot.week_day || '';
+    div.querySelector('.startTime').value = slot.start_time || '';
+    div.querySelector('.endTime').value = slot.end_time || '';
+
+    div.querySelector('.remove-btn').onclick = () => {
+      timeSlots.splice(i, 1);
+      renderTimeSlots();
+    };
+
+    container.appendChild(div);
+  });
+}
+
+document.getElementById('addTimeBtn').onclick = () => {
+  timeSlots.push({ week_day: '', start_time: '', end_time: '' });
+  renderTimeSlots();
+};
+
+/* ---------------- LOAD PROFILE ---------------- */
+
+async function loadProfile() {
+  const token = localStorage.getItem('token');
+
+  const res = await fetch('/api/profile', {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  const data = await res.json();
+
+  document.getElementById('firstName').value = data.student.first_name || '';
+  document.getElementById('lastName').value = data.student.last_name || '';
+  document.getElementById('email').value = data.student.nyu_email || '';
+
+  selectedCourses = data.courses.map(c => ({
+    id: c.course_id,
+    name: c.course_name,
+    isNew: false
+  }));
+
+  timeSlots = data.available_times || [];
+
+  renderSelectedCourses();
+  renderTimeSlots();
+}
+
+/* ---------------- SUBMIT ---------------- */
+
+document.getElementById('profileForm').addEventListener('submit', async e => {
+  e.preventDefault();
+
+  const token = localStorage.getItem('token');
+
+  const payload = {
+    first_name: document.getElementById('firstName').value,
+    last_name: document.getElementById('lastName').value,
+    courses: selectedCourses.map(c => ({
+      id: c.id,
+      name: c.name,
+      is_new: c.isNew
+    })),
+    available_times: []
+  };
+
+  document.querySelectorAll('.time-slot').forEach(slot => {
+    const wd = slot.querySelector('.weekDay').value;
+    const st = slot.querySelector('.startTime').value;
+    const et = slot.querySelector('.endTime').value;
+
+    if (wd && st && et) {
+      payload.available_times.push({
+        week_day: parseInt(wd),
+        start_time: st,
+        end_time: et
+      });
     }
+  });
 
-    document.getElementById('profileForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const token = localStorage.getItem('token');
-      
-      const updateData = {
-        first_name: document.getElementById('firstName').value,
-        last_name: document.getElementById('lastName').value
-      };
+  const pw = document.getElementById('password').value;
+  if (pw) payload.password = pw;
 
-      if (document.getElementById('password').value) {
-        updateData.password = document.getElementById('password').value;
-      }
+  const res = await fetch('/api/profile', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
 
-      try {
-        const response = await fetch('/api/profile', {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(updateData)
-        });
+  if (res.ok) {
+    alert('Updated!');
+  } else {
+    const err = await res.json();
+    alert(err.error || 'Failed');
+  }
+});
 
-        if (response.ok) {
-          alert('Profile updated successfully!');
-        } else {
-          const error = await response.json();
-          alert(error.error || 'Failed to update profile');
-        }
-      } catch (error) {
-        alert('Error: ' + error.message);
-      }
-    });
+/* ---------------- INIT ---------------- */
 
-    loadProfile();
-  </script>
+loadCourses();
+loadProfile();
+</script>
+
 </body>
 </html>
