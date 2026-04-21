@@ -193,14 +193,11 @@ def get_student_by_email():
     if not nyu_email:
         return {'error': 'nyu_email is required'}, 400
 
-    try:
-        response = supabase.table('student').select('*').eq('nyu_email', nyu_email).limit(1).execute()
-        if not response.data:
-            return {'error': 'Student not found'}, 404
-        student = {k: v for k, v in response.data[0].items() if k != 'hashed_password'}
-        return student, 200
-    except Exception as e:
-        return {'error': str(e)}, 500
+    from services.student_service import fetch_profile_bundle
+    profile = fetch_profile_bundle(nyu_email)
+    if not profile:
+        return {'error': 'Student not found'}, 404
+    return profile, 200
 
 
 # API endpoint for getting students (non-API route for compatibility)

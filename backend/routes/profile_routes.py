@@ -47,11 +47,41 @@ def update_profile():
                 .execute()
             )
 
-        if "course_ids" in data:
-            replace_courses(request.user_email, data.get("course_ids") or [])
+        if "courses" in data:
+            course_ids = []
 
+            for course in data.get("courses") or []:
+                # existing course
+                if course.get("id"):
+                    course_ids.append(course["id"])
+                else:
+                    # create new course
+                    res = (
+                        g.db.table("course")
+                        .insert({"course_name": course.get("name")})
+                        .execute()
+                    )
+
+                    if not res.data:
+                        return error_response("Failed to create course")
+
+                    new_id = res.data[0]["course_id"]
+                    course_ids.append(new_id)
+
+            replace_courses(request.user_email, course_ids)
+                
         if "available_times" in data:
-            replace_available_times(request.user_email, data.get("available_times") or [])
+            times = data.get("available_times") or []
+            
+            for time_entry in data.get("available_times") or []:
+                if not all(
+                    key in time_entry for key in ("week_day", "start_time", "end_time")
+                ):
+                    return error_response(
+                        "Each available_times entry must include week_day, start_time, and end_time"
+                    )
+            replace_available_times(request.user_email, times)
+            
     except KeyError:
         return error_response("available_times entries must include week_day, start_time, and end_time")
     except Exception as exc:

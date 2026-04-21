@@ -38,7 +38,8 @@
       try {
         const response = await fetch(`/api/student?nyu_email=${encodeURIComponent(email)}`);
         if (response.ok) {
-          const student = await response.json();
+          const profile = await response.json();
+          const student = profile.student;
           document.getElementById('studentTitle').textContent = `${student.first_name} ${student.last_name}`;
           const fields = [
             ['Name', `${student.first_name} ${student.last_name}`],
@@ -46,11 +47,25 @@
             ['Role', student.account_role],
           ];
 
-          Object.keys(student)
-            .filter(key => !['first_name', 'last_name', 'nyu_email', 'account_role', 'hashed_password'].includes(key))
-            .forEach(key => {
-              fields.push([key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()), student[key]]);
-            });
+          // Add courses
+          if (profile.courses && profile.courses.length > 0) {
+            const courseNames = profile.courses.map(c => c.course_name).join(', ');
+            fields.push(['Courses Taken', courseNames]);
+          } else {
+            fields.push(['Courses Taken', 'None']);
+          }
+
+          // Add available times
+          if (profile.available_times && profile.available_times.length > 0) {
+            const timeStrings = profile.available_times.map(t => {
+              const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+              const day = days[t.week_day - 1] || `Day ${t.week_day}`;
+              return `${day} ${t.start_time} - ${t.end_time}`;
+            }).join(', ');
+            fields.push(['Available Times', timeStrings]);
+          } else {
+            fields.push(['Available Times', 'None']);
+          }
 
           document.getElementById('studentInfo').innerHTML = fields.map(([label, value]) => `
             <p>${label}: ${value || 'N/A'}</p>
